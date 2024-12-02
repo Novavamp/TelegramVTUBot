@@ -225,7 +225,7 @@ bot.on("callback_query", async (callbackQuery) => {
                                         userId,
                                     ]);
 
-                                    bot.sendMessage(userId, `✅ Airtime purchase successful! Transaction Ref: `);
+                                    bot.sendMessage(userId, `✅ Airtime purchase successful! Transaction ID: ${response.data.transaction_id} `);
                                 } else if (response.data.status === "error") {
                                     const sensitiveErrors = [
                                         "Insufficient Balance", // Include partial matches for sensitive messages
@@ -614,7 +614,7 @@ bot.on("message", async (msg) => {
                         ]);
                         bot.sendMessage(
                             userId,
-                            `🎉 Purchase successful! Phone ${userState.phone} recharged with ${userState.label}.`
+                            `🎉 Purchase successful! Phone ${userState.phone} recharged with ${userState.label}, Transaction ID: ${response.data.transaction_id}.`
                         );
                     } else if (response.data.status === "error") {
                         const sensitiveErrors = [

@@ -612,7 +612,7 @@ bot.on("message", async (msg) => {
                         ]);
                         bot.sendMessage(
                             userId,
-                            `🎉 Purchase successful! Phone ${userState.phone} recharged with ${userState.label}.`
+                            `🎉 Purchase successful! Phone ${userState.phone} recharged with ${userState.label}, Transaction ID: ${response.data.transaction_id}.`
                         );
                     } else if (response.data.status === "error") {
                         const sensitiveErrors = [
