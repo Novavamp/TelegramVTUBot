@@ -6,6 +6,18 @@ import crypto from 'crypto';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 
+// Import minimist using the ES module syntax
+import minimist from 'minimist';
+
+// Get the port number from the command line's -p argument
+const argv = minimist(process.argv.slice(2));
+let port = argv.p || 0;
+
+if (port == 0) {
+    console.log("Port number is not specified");
+    process.exit(1);
+}
+
 dotenv.config();
 const app = express();
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -28,20 +40,12 @@ const db = new pg.Client({
     database: process.env.DATABASE_NAME,
     password: process.env.DATABASE_PASSWORD,
     port: process.env.DATABASE_PORT,
+    ssl: {
+        rejectUnauthorized: false, // Adjust based on your database security requirements
+    },
 });
 
 db.connect();
-
-async function cleanPhoneNumber(phoneNumber) {
-
-    let cleanedNumber = phoneNumber.replace(/\D/g, '');
-
-    if (cleanedNumber.startsWith('234')) {
-        cleanedNumber = '0' + cleanedNumber.slice(3);
-    }
-
-    return cleanedNumber;
-}
 
 app.get("/", (req, res) => {
     res.send('<h1>Hello World!</h1>');
@@ -672,5 +676,6 @@ bot.on("callback_query", (callbackQuery) => {
     }
 });
 
-
-app.listen(3000, () => console.log('Webhook server running on http://localhost:3000'));
+app.listen(port, () => {
+    console.log(`Example app listening on port ${port}`);
+});
