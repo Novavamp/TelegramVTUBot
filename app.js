@@ -5,6 +5,8 @@ import express from "express";
 import crypto from 'crypto';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
+import path from "path";
+import { fileURLToPath } from "url";
 
 // Import minimist using the ES module syntax
 import minimist from 'minimist';
@@ -22,7 +24,10 @@ dotenv.config();
 const app = express();
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+app.use(express.static("public"));
 app.use(bodyParser.json()); // To parse JSON from Paystack
 
 // VTU API details
@@ -59,7 +64,7 @@ async function cleanPhoneNumber(phoneNumber) {
 }
 
 app.get("/", (req, res) => {
-    res.send('<h1>Hello World!</h1>');
+    res.sendFile(__dirname + "/public/index.html");
 });
 
 bot.onText(/\/start/, async (msg) => {
