@@ -7,6 +7,7 @@ import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import path from "path";
 import { fileURLToPath } from "url";
+import pool from './db.js';
 
 dotenv.config();
 const app = express();
@@ -25,17 +26,6 @@ const VTU_API_URL = 'https://api.mobilevtu.com/v1/LfW6KEMAY5tIZ7ZL6YkPmfmmP7sy/'
 // PayStack API details
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET;
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
-
-// PostgreSQL connection
-const db = new pg.Client({
-    user: process.env.DATABASE_USER,
-    host: process.env.DATABASE_HOST,
-    database: process.env.DATABASE_NAME,
-    password: process.env.DATABASE_PASSWORD,
-    port: process.env.DATABASE_PORT,
-});
-
-db.connect();
 
 async function cleanPhoneNumber(phoneNumber) {
 
@@ -57,7 +47,7 @@ bot.onText(/\/start/, async (msg) => {
     const username = msg.chat.username || "Anonymous";
 
     // Add user to the database or update their username if it changes
-    await db.query(
+    await pool.query(
         `INSERT INTO users (telegram_id, username, email) 
          VALUES ($1, $2, $3)
          ON CONFLICT (telegram_id) 
@@ -102,7 +92,7 @@ bot.onText(/\/balance/, async (msg) => {
     const userId = msg.chat.id;
 
     // Fetch user balance from database
-    const result = await db.query(`SELECT balance FROM users WHERE telegram_id = $1`, [userId]);
+    const result = await pool.query(`SELECT balance FROM users WHERE telegram_id = $1`, [userId]);
 
     if (result.rows.length > 0) {
         const balance = parseInt(result.rows[0].balance);
@@ -118,7 +108,7 @@ bot.onText(/\/airtime/, async (msg) => {
     const userId = msg.chat.id;
 
     // Check if user exists and has sufficient balance
-    const result = await db.query(`SELECT balance FROM users WHERE telegram_id = $1`, [userId]);
+    const result = await pool.query(`SELECT balance FROM users WHERE telegram_id = $1`, [userId]);
 
     if (result.rows.length === 0) {
         return bot.sendMessage(userId, `⚠️ You are not registered. Please use /start to register.`);
@@ -161,7 +151,7 @@ bot.on("callback_query", async (callbackQuery) => {
             }
 
             // Check user balance
-            const balanceResult = await db.query(`SELECT balance FROM users WHERE telegram_id = $1`, [userId]);
+            const balanceResult = await pool.query(`SELECT balance FROM users WHERE telegram_id = $1`, [userId]);
             const balance = parseInt(balanceResult.rows[0].balance);
             if (amount > balanceResult.rows[0].balance) {
                 return bot.sendMessage(userId, `❌ Insufficient balance (₦${balance.toFixed(2)}). Please fund your wallet.`);
@@ -218,7 +208,7 @@ bot.on("callback_query", async (callbackQuery) => {
                                 if (response.data.status === "success") {
 
                                     // Deduct amount and process VTU
-                                    await db.query(`UPDATE users SET balance = balance - $1 WHERE telegram_id = $2`, [
+                                    await pool.query(`UPDATE users SET balance = balance - $1 WHERE telegram_id = $2`, [
                                         amount,
                                         userId,
                                     ]);
@@ -281,15 +271,15 @@ bot.onText(/\/fund/, async (msg) => {
             return bot.sendMessage(userId, "❌ Invalid amount. Please enter a valid number.");
         }
 
-        // Create user in DB if not exists
-        const user = await db.query(
+        // Create user in pool if not exists
+        const user = await pool.query(
             `INSERT INTO users (telegram_id, username, email) 
              VALUES ($1, $2, $3) ON CONFLICT (telegram_id) DO UPDATE SET username = $2 RETURNING id`,
             [userId, msg.chat.username, `${userId}@telegram.bot`]
         );
 
         // Create transaction entry
-        const transaction = await db.query(
+        const transaction = await pool.query(
             `INSERT INTO transactions (user_id, amount, status, paystack_reference) 
              VALUES ($1, $2, 'pending', gen_random_uuid()) RETURNING *`,
             [userId, amount]
@@ -334,7 +324,7 @@ app.post('/webhook', async (req, res) => {
             console.log(`Payment successful for ${email}, amount: ₦${amountInNaira}, reference: ${reference}`);
 
             // Get the user's Telegram ID (ensure it's saved when they initiate the bot)
-            const response = await db.query(`SELECT telegram_id FROM users WHERE email = $1`, [email]);
+            const response = await pool.query(`SELECT telegram_id FROM users WHERE email = $1`, [email]);
             const userId = response.rows[0]?.telegram_id;
 
             if (!userId) {
@@ -343,7 +333,7 @@ app.post('/webhook', async (req, res) => {
             }
 
             // Update transaction and balance
-            await db.query(
+            await pool.query(
                 `UPDATE transactions SET status = 'successful' WHERE user_id = $1 AND paystack_reference = $2`,
                 [userId, reference]
             );
@@ -372,7 +362,7 @@ async function updateUserBalance(email, amount) {
         SET balance = balance + $1
         WHERE email = $2
     `;
-    await db.query(query, [amount, email])
+    await pool.query(query, [amount, email])
         .then(() => console.log('User balance updated successfully'))
         .catch((err) => console.error('Error updating balance:', err));
 }
@@ -392,7 +382,7 @@ bot.onText(/\/verify (.+)/, async (msg, match) => {
         if (response.data.data.status === "success") {
             const amount = response.data.data.amount / 100;
 
-            const transaction = await db.query(
+            const transaction = await pool.query(
                 `SELECT * FROM transactions WHERE paystack_reference = $1`,
                 [reference]
             );
@@ -401,10 +391,10 @@ bot.onText(/\/verify (.+)/, async (msg, match) => {
                 const userId = transaction.rows[0].user_id;
 
                 // Update transaction and balance
-                await db.query(`UPDATE transactions SET status = 'successful' WHERE id = $1`, [
+                await pool.query(`UPDATE transactions SET status = 'successful' WHERE id = $1`, [
                     transaction.rows[0].id,
                 ]);
-                await db.query(`UPDATE users SET balance = balance + $1 WHERE id = $2`, [
+                await pool.query(`UPDATE users SET balance = balance + $1 WHERE id = $2`, [
                     amount,
                     userId,
                 ]);
@@ -574,7 +564,7 @@ bot.on("message", async (msg) => {
 
         case "awaitingConfirmation":
             if (text.toLowerCase() === "yes") {
-                const balanceResult = await db.query(`SELECT balance FROM users WHERE telegram_id = $1`, [userId]);
+                const balanceResult = await pool.query(`SELECT balance FROM users WHERE telegram_id = $1`, [userId]);
                 const balance = parseInt(balanceResult.rows[0].balance);
 
                 if (parseInt(userState.price) > balance) {
@@ -606,7 +596,7 @@ bot.on("message", async (msg) => {
                     );
 
                     if (response.data.status === "success") {
-                        await db.query(`UPDATE users SET balance = balance - $1 WHERE telegram_id = $2`, [
+                        await pool.query(`UPDATE users SET balance = balance - $1 WHERE telegram_id = $2`, [
                             userState.price,
                             userId,
                         ]);
