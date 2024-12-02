@@ -47,6 +47,17 @@ const db = new pg.Client({
 
 db.connect();
 
+async function cleanPhoneNumber(phoneNumber) {
+
+    let cleanedNumber = phoneNumber.replace(/\D/g, '');
+
+    if (cleanedNumber.startsWith('234')) {
+        cleanedNumber = '0' + cleanedNumber.slice(3);
+    }
+
+    return cleanedNumber;
+}
+
 app.get("/", (req, res) => {
     res.send('<h1>Hello World!</h1>');
 });
